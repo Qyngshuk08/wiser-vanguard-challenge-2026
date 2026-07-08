@@ -1,0 +1,4 @@
+method,cost,runtime_ms,n_qubits
+brute_force,-3184.0,95.4897403717041,12
+exact_eigensolver,-3184.0,17.104387283325195,12
+qaoa_simulator,-3184.0,4547.111988067627,12

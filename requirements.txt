@@ -1,0 +1,10 @@
+numpy
+pandas
+qiskit
+qiskit-optimization
+qiskit-algorithms
+qiskit-aer
+
+# Only needed for the hardware robustness tests (portfolio/16_hardware_test.py,
+# staffing/17_hardware_test.py), run inside qBraid Lab:
+qiskit-ibm-runtime

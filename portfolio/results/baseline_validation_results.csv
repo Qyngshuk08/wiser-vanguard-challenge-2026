@@ -1,0 +1,4 @@
+method,cost,assets_selected,runtime_ms,n_qubits
+brute_force,-0.1803222867484418,"A01, A06, A08, A09",2.9370784759521484,12
+exact_eigensolver,-0.1803222867484418,"A01, A06, A08, A09",43.73025894165039,12
+qaoa_simulator,-0.175800963954094,"A04, A06, A08, A09",5380.605936050415,12

@@ -1,0 +1,13 @@
+asset_id,name,asset_class,volatility_annual,liquidity_tier,transaction_cost_bps
+A01,US Large-Cap Value Equity,Equity,0.15,High,5
+A02,US Large-Cap Growth Equity,Equity,0.19,High,5
+A03,US Small-Cap Equity,Equity,0.22,Medium,10
+A04,Non-US Developed Equity (unhedged),Equity,0.17,High,8
+A05,Emerging Markets Equity (unhedged),Equity,0.23,Medium,15
+A06,US Aggregate Bonds,FixedIncome,0.05,High,3
+A07,US Long-Term Treasuries,FixedIncome,0.11,High,3
+A08,US High-Yield Bonds,FixedIncome,0.09,Medium,8
+A09,EM Sovereign Bonds (hedged),FixedIncome,0.1,Low,12
+A10,Broad Commodities,Commodities,0.18,Medium,10
+A11,REITs (US),Alternatives,0.2,Medium,8
+A12,Cash / Short-Term Reserves,Cash,0.01,High,1

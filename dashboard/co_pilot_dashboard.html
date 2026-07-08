@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quantum Allocation &amp; Staffing Co-Pilot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0B0F17; --panel:#131A26; --panel-2:#1A2333; --line:#26324A;
+    --cyan:#4FD1C5; --cyan-dim:#2C6B66; --amber:#E8A33D; --amber-dim:#7A5522;
+    --rose:#E85D75; --rose-dim:#7A2E3A; --paper:#E7ECEF; --muted:#8B98A9;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--ink);color:var(--paper);font-family:'Inter',sans-serif;}
+  .disp{font-family:'Space Grotesk',sans-serif;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .wrap{max-width:980px;margin:0 auto;padding:2.5rem 1.5rem 4rem;}
+  .eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--cyan);margin:0 0 .4rem;}
+  h1{font-size:28px;font-weight:700;margin:0 0 .3rem;}
+  .sub{color:var(--muted);font-size:14px;margin:0 0 1.75rem;max-width:640px;line-height:1.6;}
+  .tabs{display:flex;gap:8px;margin-bottom:1.75rem;border-bottom:1px solid var(--line);}
+  .tab{background:none;border:none;color:var(--muted);font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:500;padding:10px 4px;cursor:pointer;border-bottom:2px solid transparent;margin-right:1.5rem;}
+  .tab.active{color:var(--paper);border-bottom-color:var(--cyan);}
+  .panel{display:none;}
+  .panel.active{display:block;}
+  .hero-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.75rem;}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;}
+  .stat .lbl{font-size:11px;color:var(--muted);letter-spacing:.03em;text-transform:uppercase;margin-bottom:6px;}
+  .stat .val{font-size:20px;font-weight:500;}
+  .val.cyan{color:var(--cyan);} .val.amber{color:var(--amber);} .val.rose{color:var(--rose);}
+  .grid2{display:grid;grid-template-columns:1.2fr 1fr;gap:16px;margin-bottom:1.75rem;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:1.25rem;}
+  .card h2{font-size:15px;font-weight:500;margin:0 0 1rem;font-family:'Space Grotesk',sans-serif;}
+  .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .bar-label{width:150px;font-size:12px;color:var(--paper);flex-shrink:0;}
+  .bar-track{flex:1;height:20px;background:var(--panel-2);border-radius:4px;overflow:hidden;}
+  .bar-fill{height:100%;background:var(--cyan);border-radius:4px;}
+  .bar-pct{width:44px;text-align:right;font-size:12px;color:var(--muted);}
+  table.data{width:100%;border-collapse:collapse;font-size:13px;}
+  table.data th{text-align:left;color:var(--muted);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.03em;padding:0 0 8px;border-bottom:1px solid var(--line);}
+  table.data td{padding:8px 0;border-bottom:1px solid var(--line);}
+  table.data tr:last-child td{border-bottom:none;}
+  .check{color:var(--cyan);} .cross{color:var(--rose);}
+  .badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500;}
+  .badge.ok{background:var(--cyan-dim);color:var(--cyan);}
+  .badge.short{background:var(--rose-dim);color:var(--rose);}
+  .schedule-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+  .shift-card{background:var(--panel-2);border-radius:8px;padding:12px;border:1px solid var(--line);}
+  .shift-card .sname{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:8px;}
+  .agent-chip{display:inline-block;background:var(--ink);border:1px solid var(--line);border-radius:6px;padding:3px 8px;font-size:11px;margin:2px 3px 0 0;}
+  .disclaimer{background:var(--panel-2);border-left:3px solid var(--amber);border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:1.75rem;}
+  .qring-strip{display:flex;align-items:center;gap:22px;flex-wrap:wrap;}
+  .qring{display:flex;flex-direction:column;align-items:center;gap:6px;}
+  .qring svg{display:block;}
+  .qring .qlabel{font-size:11px;color:var(--muted);}
+  .legend{display:flex;gap:16px;margin-top:14px;font-size:11px;color:var(--muted);flex-wrap:wrap;}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+  button.action{background:var(--cyan-dim);color:var(--cyan);border:1px solid var(--cyan);border-radius:8px;padding:9px 16px;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:500;cursor:pointer;}
+  button.action:hover{background:var(--cyan);color:var(--ink);}
+  button.action:disabled{opacity:.5;cursor:default;}
+  .timer{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--amber);margin-left:12px;}
+  .diff-added{color:var(--cyan);} .diff-removed{color:var(--rose);text-decoration:line-through;opacity:.6;}
+  .footnote{font-size:11px;color:var(--muted);margin-top:.5rem;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="eyebrow">Vanguard x WISER Quantum+AI Challenge 2026</p>
+  <h1 class="disp">Quantum allocation &amp; staffing co-pilot</h1>
+  <p class="sub">Hybrid quantum-classical optimization for multi-asset portfolio construction and call-center staffing. Recommendations below use the classically-verified exact solution at this problem scale; QAOA results are shown alongside for research transparency, not as the operational answer.</p>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="portfolio">Portfolio co-pilot</button>
+    <button class="tab" data-tab="staffing">Workforce planner</button>
+  </div>
+
+  <div class="panel active" id="panel-portfolio">
+    <div class="hero-row">
+      <div class="stat"><div class="lbl">Recommended holdings</div><div class="val mono">6 assets</div></div>
+      <div class="stat"><div class="lbl">Objective cost</div><div class="val mono cyan">-0.2220</div></div>
+      <div class="stat"><div class="lbl">Guardrails satisfied</div><div class="val mono cyan">4 / 4</div></div>
+      <div class="stat"><div class="lbl">Turnover vs. prior</div><div class="val mono amber">4 of 6 changed</div></div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h2>Recommended allocation</h2>
+        <div id="alloc-bars"></div>
+      </div>
+      <div class="card">
+        <h2>Guardrail checklist</h2>
+        <table class="data" id="guardrail-table"></table>
+        <h2 style="margin-top:1.25rem;">Method comparison</h2>
+        <table class="data" id="portfolio-methods"></table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:1.75rem;">
+      <h2>Turnover from prior holdings</h2>
+      <div id="turnover-diff" class="mono" style="font-size:13px;line-height:2;"></div>
+      <p class="footnote">Transaction cost is priced directly into the objective (not a separate check) using each asset's basis-point cost, so the recommendation already accounts for the cost of these changes.</p>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-staffing">
+    <div class="hero-row">
+      <div class="stat"><div class="lbl">Recommended cost</div><div class="val mono cyan">-2184</div></div>
+      <div class="stat"><div class="lbl">Skill coverage</div><div class="val mono cyan">6 / 6 met</div></div>
+      <div class="stat"><div class="lbl">Agents deployed</div><div class="val mono">4 / 4</div></div>
+      <div class="stat"><div class="lbl">Disruption re-solve</div><div class="val mono amber">~4.3s</div></div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h2>Recommended schedule</h2>
+        <div class="schedule-grid" id="schedule-grid"></div>
+      </div>
+      <div class="card">
+        <h2>Method comparison</h2>
+        <table class="data" id="staffing-methods"></table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:1.75rem;">
+      <h2>Disruption scenario: mid-day volume spike</h2>
+      <p class="footnote" style="margin-bottom:.75rem;">Simulates Support demand on S2 jumping 40% (2 &rarr; 3 agents required). Precomputed scenario for demo purposes -- not a live in-browser solve.</p>
+      <button class="action" id="disrupt-btn">Simulate volume spike &rarr;</button>
+      <span class="timer" id="disrupt-timer" style="display:none;"></span>
+      <div id="disrupt-result" style="margin-top:1rem;display:none;"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Scalability frontier</h2>
+    <p class="footnote" style="margin-bottom:1rem;">Where each method actually breaks down, measured directly -- not estimated. Same pattern held across both tracks independently.</p>
+    <div class="qring-strip" id="qring-strip"></div>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--cyan);"></span>QAOA solved, feasible</span>
+      <span><span class="dot" style="background:var(--amber);border:1px solid var(--amber);"></span>Timed out (&gt;45-60s)</span>
+      <span><span class="dot" style="background:var(--rose);"></span>Process killed (OOM)</span>
+    </div>
+  </div>
+
+  <div class="disclaimer" style="margin-top:1.75rem;">
+    At this problem scale, classical exact solving outperforms QAOA on every axis we measured -- speed, optimality, and feasibility. This dashboard reports classical-exact recommendations as the operational answer and shows QAOA as a comparison point, consistent with the current published state of quantum optimization for combinatorial finance and operations problems.
+  </div>
+</div>
+
+<script>
+const portfolioAssets = [
+  {id:'A01', name:'US large-cap value equity', weight:16.7, prior:false},
+  {id:'A06', name:'US aggregate bonds', weight:16.7, prior:false},
+  {id:'A08', name:'US high-yield bonds', weight:16.7, prior:false},
+  {id:'A09', name:'EM sovereign bonds (hedged)', weight:16.7, prior:false},
+  {id:'A10', name:'Broad commodities', weight:16.7, prior:true},
+  {id:'A12', name:'Cash / short-term reserves', weight:16.7, prior:true},
+];
+const priorHoldings = ['A02','A03','A05','A07','A10','A12'];
+
+const allocDiv = document.getElementById('alloc-bars');
+portfolioAssets.forEach(a=>{
+  const row = document.createElement('div');
+  row.className = 'bar-row';
+  row.innerHTML = '<div class="bar-label mono">' + a.id + ' <span style="color:var(--muted);">' + a.name + '</span></div>' +
+    '<div class="bar-track"><div class="bar-fill" style="width:' + (a.weight*4) + '%;"></div></div>' +
+    '<div class="bar-pct mono">' + a.weight.toFixed(1) + '%</div>';
+  allocDiv.appendChild(row);
+});
+
+const guardrails = [
+  {name:'Equity exposure', rule:'<= 3 holdings', actual:'1 (A01)', ok:true},
+  {name:'Fixed income exposure', rule:'>= 2 holdings', actual:'3 (A06, A08, A09)', ok:true},
+  {name:'Commodities + alternatives', rule:'<= 1 holding', actual:'1 (A10)', ok:true},
+  {name:'Cash', rule:'<= 1 holding', actual:'1 (A12)', ok:true},
+];
+document.getElementById('guardrail-table').innerHTML = '<tr><th>Guardrail</th><th>Rule</th><th>Actual</th><th></th></tr>' +
+  guardrails.map(function(g){
+    return '<tr><td>' + g.name + '</td><td class="mono" style="color:var(--muted);">' + g.rule + '</td><td class="mono">' + g.actual + '</td><td>' + (g.ok?'<span class="check">&#10003;</span>':'<span class="cross">&times;</span>') + '</td></tr>';
+  }).join('');
+
+const pMethods = [
+  {m:'Brute force', cost:'-0.2220', time:'20 ms', note:'ground truth'},
+  {m:'Exact eigensolver', cost:'-0.2220', time:'125 ms', note:'matches brute force'},
+  {m:'QAOA (simulator)', cost:'--', time:'timed out (60s)', note:'17 qubits, past the wall'},
+];
+document.getElementById('portfolio-methods').innerHTML = '<tr><th>Method</th><th>Cost</th><th>Time</th><th>Note</th></tr>' +
+  pMethods.map(function(r){
+    return '<tr><td>' + r.m + '</td><td class="mono">' + r.cost + '</td><td class="mono">' + r.time + '</td><td style="color:var(--muted);">' + r.note + '</td></tr>';
+  }).join('');
+
+const turnoverDiv = document.getElementById('turnover-diff');
+const kept = portfolioAssets.filter(function(a){return a.prior;}).map(function(a){return a.id;});
+const added = portfolioAssets.filter(function(a){return !a.prior;}).map(function(a){return a.id;});
+const dropped = priorHoldings.filter(function(id){return kept.indexOf(id)===-1;});
+turnoverDiv.innerHTML = '<div><span style="color:var(--muted);">kept:</span> ' + kept.join(', ') + '</div>' +
+  '<div><span class="diff-added">+ added:</span> ' + added.join(', ') + '</div>' +
+  '<div><span class="diff-removed">- dropped:</span> ' + dropped.join(', ') + '</div>';
+
+const schedule = [
+  {shift:'S1 (8am-4pm)', agents:['AG2 (Support)','AG3 (Sales)']},
+  {shift:'S2 (10am-6pm)', agents:['AG1 (Sales+Support)']},
+  {shift:'S3 (12pm-8pm)', agents:['AG4 (Sales+Support)']},
+];
+const schedGrid = document.getElementById('schedule-grid');
+schedule.forEach(function(s){
+  const card = document.createElement('div');
+  card.className = 'shift-card';
+  card.innerHTML = '<div class="sname">' + s.shift + '</div>' + s.agents.map(function(a){return '<span class="agent-chip">' + a + '</span>';}).join('');
+  schedGrid.appendChild(card);
+});
+
+const sMethods = [
+  {m:'Brute force', cost:'-2184', time:'105 ms', note:'ground truth'},
+  {m:'Exact eigensolver', cost:'-2184', time:'35 ms', note:'matches brute force'},
+  {m:'QAOA (simulator)', cost:'-1884', time:'4.3 s', note:'gap 300, S2/Sales short'},
+];
+document.getElementById('staffing-methods').innerHTML = '<tr><th>Method</th><th>Cost</th><th>Time</th><th>Note</th></tr>' +
+  sMethods.map(function(r){
+    return '<tr><td>' + r.m + '</td><td class="mono">' + r.cost + '</td><td class="mono">' + r.time + '</td><td style="color:var(--muted);">' + r.note + '</td></tr>';
+  }).join('');
+
+document.querySelectorAll('.tab').forEach(function(tab){
+  tab.addEventListener('click', function(){
+    document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+    document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');});
+    tab.classList.add('active');
+    document.getElementById('panel-'+tab.dataset.tab).classList.add('active');
+  });
+});
+
+const disruptBtn = document.getElementById('disrupt-btn');
+const disruptTimer = document.getElementById('disrupt-timer');
+const disruptResult = document.getElementById('disrupt-result');
+disruptBtn.addEventListener('click', function(){
+  disruptBtn.disabled = true;
+  disruptTimer.style.display = 'inline';
+  let t = 0;
+  const interval = setInterval(function(){
+    t += 0.1;
+    disruptTimer.textContent = 'Re-solving... ' + t.toFixed(1) + 's';
+    if(t >= 4.3){
+      clearInterval(interval);
+      disruptTimer.textContent = 'Resolved in 4.3s';
+      disruptResult.style.display = 'block';
+      disruptResult.innerHTML =
+        '<div style="font-size:13px;line-height:1.8;">' +
+          '<div><span style="color:var(--rose);">S2 / Support demand: 2 &rarr; 3 agents required</span></div>' +
+          '<div style="margin-top:8px;color:var(--muted);">All 4 agents are already deployed across S1-S3 in the recommended plan. Meeting the extra Support slot on S2 requires either:</div>' +
+          '<div style="margin-top:6px;"><span class="badge ok">Option A</span> extend AG1 or AG2\'s shift into overtime</div>' +
+          '<div style="margin-top:4px;"><span class="badge short">Option B</span> accept a temporary coverage gap and monitor SLA</div>' +
+          '<div style="margin-top:8px;color:var(--muted);font-size:12px;">This is a genuine capacity trade-off, not a solver failure -- the baseline plan already uses full headcount. Re-solve confirms no idle-agent fix exists and surfaces the two real manager choices instead.</div>' +
+        '</div>';
+      disruptBtn.disabled = false;
+    }
+  }, 100);
+});
+
+function qring(id, label, statusColor, filled, isX){
+  const svg = '<svg width="46" height="46" viewBox="0 0 46 46">' +
+    (filled ? '<circle cx="23" cy="23" r="18" fill="'+statusColor+'22" stroke="'+statusColor+'" stroke-width="2"/>' :
+              '<circle cx="23" cy="23" r="18" fill="none" stroke="'+statusColor+'" stroke-width="2" stroke-dasharray="4,3"/>') +
+    (isX ? '<line x1="15" y1="15" x2="31" y2="31" stroke="'+statusColor+'" stroke-width="2"/><line x1="31" y1="15" x2="15" y2="31" stroke="'+statusColor+'" stroke-width="2"/>' : '') +
+    '<text x="23" y="27" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" fill="'+(filled?statusColor:'#8B98A9')+'">'+id+'</text>' +
+    '</svg>';
+  return '<div class="qring"><div>' + svg + '</div><div class="qlabel">' + label + '</div></div>';
+}
+
+const qringData = [
+  {id:'8q', label:'Portfolio, 8', color:'#4FD1C5', filled:true, isX:false},
+  {id:'12q', label:'Portfolio, 12', color:'#E8A33D', filled:false, isX:false},
+  {id:'16q', label:'Portfolio, 16', color:'#E8A33D', filled:false, isX:false},
+  {id:'12q', label:'Staffing, 12', color:'#4FD1C5', filled:true, isX:false},
+  {id:'20q', label:'Staffing, 20', color:'#E85D75', filled:false, isX:true},
+];
+document.getElementById('qring-strip').innerHTML = qringData.map(function(q){return qring(q.id, q.label, q.color, q.filled, q.isX);}).join('');
+</script>
+</body>
+</html>

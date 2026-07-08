@@ -1,0 +1,4 @@
+scenario,cost,time_s,true_optimum
+baseline_qaoa,-3184.0,4.425037384033203,-3184.0
+disruption_cold,-5184.0,4.320664644241333,-5184.0
+disruption_warm,-4184.0,4.251993656158447,-5184.0

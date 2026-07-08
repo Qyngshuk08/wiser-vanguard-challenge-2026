@@ -1,0 +1,4 @@
+method,cost,assets,feasible,runtime_s
+brute_force,-0.22204770322633358,"A01, A06, A08, A09, A10, A12",True,0.019925832748413086
+exact_eigensolver,-0.22204770322633358,"A01, A06, A08, A09, A10, A12",True,0.11436843872070312
+qaoa,,TIMED_OUT,,

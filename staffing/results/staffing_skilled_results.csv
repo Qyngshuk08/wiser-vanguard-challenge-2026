@@ -1,0 +1,4 @@
+method,cost,runtime_s
+brute_force,-2184.0,0.13432073593139648
+exact_eigensolver,-2184.0,0.06395745277404785
+qaoa,-1576.0,5.774798154830933
