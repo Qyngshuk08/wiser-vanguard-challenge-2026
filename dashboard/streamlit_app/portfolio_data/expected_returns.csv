@@ -1,0 +1,13 @@
+asset_id,name,expected_return_annual
+A01,US Large-Cap Value Equity,0.068
+A02,US Large-Cap Growth Equity,0.033
+A03,US Small-Cap Equity,0.061
+A04,Non-US Developed Equity (unhedged),0.0675
+A05,Emerging Markets Equity (unhedged),0.06
+A06,US Aggregate Bonds,0.043
+A07,US Long-Term Treasuries,0.04
+A08,US High-Yield Bonds,0.048
+A09,EM Sovereign Bonds (hedged),0.056
+A10,Broad Commodities,0.0475
+A11,REITs (US),0.0625
+A12,Cash / Short-Term Reserves,0.035
