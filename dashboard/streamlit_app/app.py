@@ -14,7 +14,6 @@ import datetime
 import numpy as np
 import pandas as pd
 import streamlit as st
-import plotly.graph_objects as go
 
 from qiskit_optimization import QuadraticProgram
 from qiskit_optimization.algorithms import MinimumEigenOptimizer
@@ -148,62 +147,6 @@ if page == "Portfolio Co-Pilot":
             m4.metric("Constraint Status", "Satisfied" if feasible else "Violated")
 
             st.markdown("<br>", unsafe_allow_html=True)
-
-            if selected:
-                viz_col1, viz_col2 = st.columns(2)
-
-                with viz_col1:
-                    st.markdown("**Allocation Breakdown**")
-                    weight = 100 / len(selected)
-                    donut = go.Figure(data=[go.Pie(
-                        labels=selected,
-                        values=[weight] * len(selected),
-                        hole=0.55,
-                        marker=dict(colors=["#2D5266", "#3A6B85", "#6E8FA3", "#8FA9B8",
-                                             "#4A7A94", "#5C8AA3", "#7D9FB0", "#94B0BE"],
-                                    line=dict(color="#0A0E14", width=2)),
-                        textfont=dict(color="#E4E7EB", size=12),
-                        hovertemplate="%{label}<br>%{value:.1f}%<extra></extra>",
-                    )])
-                    donut.update_layout(
-                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                        font=dict(color="#C4CAD4", family="Inter"),
-                        showlegend=True, legend=dict(orientation="h", y=-0.15),
-                        margin=dict(t=10, b=10, l=10, r=10), height=320,
-                    )
-                    st.plotly_chart(donut, use_container_width=True)
-
-                with viz_col2:
-                    st.markdown("**Risk-Return Landscape**")
-                    vol = np.sqrt(np.diag(sigma))
-                    is_selected = [a in selected for a in asset_ids]
-                    scatter = go.Figure()
-                    scatter.add_trace(go.Scatter(
-                        x=vol[~np.array(is_selected)] * 100, y=mu[~np.array(is_selected)] * 100,
-                        mode="markers+text",
-                        text=[a for a, s in zip(asset_ids, is_selected) if not s],
-                        textposition="top center", textfont=dict(size=9, color="#4B5563"),
-                        marker=dict(size=9, color="#1E2530", line=dict(color="#2D5266", width=1)),
-                        name="Not selected", hovertemplate="%{text}<br>Vol: %{x:.1f}%<br>Return: %{y:.1f}%<extra></extra>",
-                    ))
-                    scatter.add_trace(go.Scatter(
-                        x=vol[is_selected] * 100, y=mu[is_selected] * 100,
-                        mode="markers+text",
-                        text=[a for a, s in zip(asset_ids, is_selected) if s],
-                        textposition="top center", textfont=dict(size=10, color="#E4E7EB"),
-                        marker=dict(size=13, color="#3A6B85", line=dict(color="#6E8FA3", width=2)),
-                        name="Selected", hovertemplate="%{text}<br>Vol: %{x:.1f}%<br>Return: %{y:.1f}%<extra></extra>",
-                    ))
-                    scatter.update_layout(
-                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                        font=dict(color="#C4CAD4", family="Inter"),
-                        xaxis=dict(title="Volatility (%)", gridcolor="#1E2530", zerolinecolor="#1E2530"),
-                        yaxis=dict(title="Expected Return (%)", gridcolor="#1E2530", zerolinecolor="#1E2530"),
-                        showlegend=True, legend=dict(orientation="h", y=-0.25),
-                        margin=dict(t=10, b=10, l=10, r=10), height=320,
-                    )
-                    st.plotly_chart(scatter, use_container_width=True)
-
             st.markdown("**Recommended Allocation**")
 
             if selected:
