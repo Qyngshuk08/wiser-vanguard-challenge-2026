@@ -10,6 +10,7 @@ for Portfolio, 08_baseline.py / 14_constrained.py logic for Staffing).
 
 Run with: streamlit run app.py
 """
+import os
 import time
 import numpy as np
 import pandas as pd
@@ -22,6 +23,15 @@ from qiskit_algorithms import NumPyMinimumEigensolver, QAOA
 from qiskit_algorithms.optimizers import COBYLA
 from qiskit.primitives import StatevectorSampler
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
+
+# Anchor all data paths to this script's own location, not the working
+# directory. Local `streamlit run` sets cwd to the app file's folder, but
+# Streamlit Cloud does NOT -- it runs from elsewhere in the mounted repo,
+# which silently breaks plain relative paths like "portfolio_data/x.csv".
+# This fix works identically on both local and Cloud.
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+PORTFOLIO_DATA = os.path.join(APP_DIR, "portfolio_data")
+STAFFING_DATA = os.path.join(APP_DIR, "staffing_data")
 
 st.set_page_config(page_title="Quantum Co-Pilot", layout="wide", page_icon="\u269b\ufe0f")
 
@@ -51,9 +61,9 @@ tab1, tab2 = st.tabs(["Portfolio Co-Pilot", "Workforce Planner"])
 # PORTFOLIO TAB
 # ===========================================================================
 with tab1:
-    mu_df = pd.read_csv("portfolio_data/expected_returns.csv")
-    cov_df = pd.read_csv("portfolio_data/covariance_matrix.csv", index_col=0)
-    meta_df = pd.read_csv("portfolio_data/asset_metadata.csv")
+    mu_df = pd.read_csv(os.path.join(PORTFOLIO_DATA, "expected_returns.csv"))
+    cov_df = pd.read_csv(os.path.join(PORTFOLIO_DATA, "covariance_matrix.csv"), index_col=0)
+    meta_df = pd.read_csv(os.path.join(PORTFOLIO_DATA, "asset_metadata.csv"))
     asset_ids = mu_df["asset_id"].tolist()
     mu = mu_df["expected_return_annual"].values
     sigma = cov_df.values
@@ -130,9 +140,9 @@ with tab1:
 # STAFFING TAB
 # ===========================================================================
 with tab2:
-    agents_df = pd.read_csv("staffing_data/agents.csv")
-    shifts_df = pd.read_csv("staffing_data/shifts.csv")
-    demand_df = pd.read_csv("staffing_data/demand_forecast.csv")
+    agents_df = pd.read_csv(os.path.join(STAFFING_DATA, "agents.csv"))
+    shifts_df = pd.read_csv(os.path.join(STAFFING_DATA, "shifts.csv"))
+    demand_df = pd.read_csv(os.path.join(STAFFING_DATA, "demand_forecast.csv"))
     agent_ids = agents_df["agent_id"].tolist()
     shift_ids = shifts_df["shift_id"].tolist()
     n_agents = len(agent_ids)
