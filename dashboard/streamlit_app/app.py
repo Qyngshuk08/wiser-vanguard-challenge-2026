@@ -1,3 +1,4 @@
+
 """
 Quantum Allocation & Staffing Co-Pilot -- Streamlit App
 Vanguard x WISER Quantum Challenge 2026
