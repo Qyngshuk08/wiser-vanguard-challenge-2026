@@ -1,4 +1,5 @@
 streamlit
+plotly
 numpy
 pandas
 qiskit
