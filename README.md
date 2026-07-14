@@ -35,17 +35,27 @@ staffing/
   results/
 
 dashboard/
-  co_pilot_dashboard.html   static demo dashboard (both tracks)
   streamlit_app/            LIVE interactive dashboard -- real solver, not mocked
-    app.py                    run with: streamlit run app.py
+    .streamlit/
+      config.toml             theme config
     portfolio_data/           copy of portfolio CSVs (self-contained)
     staffing_data/            copy of staffing CSVs (self-contained)
+    app.py
+    requirements.txt
+    runtime.txt
 
 docs/
   ASSUMPTIONS.md          consolidated data/methodology assumptions
 ```
 
-## Running locally
+## Live dashboard
+**[wiser-vanguard-challenge.streamlit.app](https://wiser-vanguard-challenge.streamlit.app/)**
+
+Every slider triggers a real QUBO solve on click -- not precomputed. Tested
+across the full slider range (16 Portfolio combinations, 18 Staffing
+combinations including the demand-spike checkbox) before deployment.
+
+## Running the QUBO solver scripts locally
 ```bash
 pip install -r requirements.txt
 cd portfolio && python3 05_baseline.py      # ~10s
@@ -54,16 +64,6 @@ cd ../staffing && python3 08_baseline.py    # ~10s
 Each script is self-contained: reads from its local `data/`, writes to its
 local `results/`, and prints a brute-force vs. exact-eigensolver vs. QAOA
 comparison with feasibility checks.
-
-## Running the live interactive dashboard
-```bash
-cd dashboard/streamlit_app
-streamlit run app.py
-```
-Opens in your browser. Every slider triggers a real QUBO solve on click --
-not precomputed. Tested across the full slider range (16 Portfolio
-combinations, 18 Staffing combinations including the demand-spike checkbox)
-before being added to this repo.
 
 ## Running the real-hardware tests (qBraid)
 See the "qBraid setup" section below. Requires an IBM Quantum account linked
