@@ -73,7 +73,7 @@ with st.sidebar:
     st.markdown("<div class='brand-sub'>Vanguard &times; WISER 2026</div>", unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
-    page = st.radio("Navigate", ["Portfolio Co-Pilot", "Workforce Planner"], label_visibility="collapsed")
+    page = st.radio("Navigate", ["Portfolio Co-Pilot", "Workforce Planner", "Hardware Validation"], label_visibility="collapsed")
 
     st.markdown("""
     <div class='status-panel'>
@@ -290,7 +290,7 @@ if page == "Portfolio Co-Pilot":
 # ===========================================================================
 # WORKFORCE PLANNER
 # ===========================================================================
-else:
+elif page == "Workforce Planner":
     st.markdown("<div class='eyebrow'>Call Center Operations</div>", unsafe_allow_html=True)
     st.markdown("<div class='page-title'>Workforce Planner</div>", unsafe_allow_html=True)
     st.markdown("<div class='page-desc'>Quantum-assisted shift scheduling with live demand-driven re-optimization.</div>", unsafe_allow_html=True)
@@ -481,6 +481,77 @@ else:
                 """)
         else:
             st.markdown("<div style='padding:60px 0; text-align:center; color:#4B5563;'>Set operating parameters and click <b>Generate Schedule</b> to run the live optimizer.</div>", unsafe_allow_html=True)
+
+# ===========================================================================
+# HARDWARE VALIDATION (read-only report -- not a live solve, unlike the
+# two pages above. These are real results from real IBM hardware runs,
+# executed via the Classiq IDE against an IBM Fez backend.)
+# ===========================================================================
+else:
+    st.markdown("<div class='eyebrow'>Real Hardware Results</div>", unsafe_allow_html=True)
+    st.markdown("<div class='page-title'>Hardware Validation</div>", unsafe_allow_html=True)
+    st.markdown("<div class='page-desc'>Five circuits, run on real IBM Fez hardware via the Classiq IDE -- not simulation. This page reports what actually happened, not what a model predicts should happen.</div>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    hw_rows = [
+        {"Circuit": "Portfolio -- penalty method", "Qubits": 12, "Sim Feasible": "4.80%*",
+         "Fez Feasible": "10.50%", "Best Cost (Fez)": "-0.1745", "True Optimum": "-0.1803"},
+        {"Circuit": "Staffing -- penalty method", "Qubits": 12, "Sim Feasible": "7.80%*",
+         "Fez Feasible": "4.80%", "Best Cost (Fez)": "200", "True Optimum": "-3184"},
+        {"Circuit": "Portfolio -- XY-mixer (abstract ring)", "Qubits": 12, "Sim Feasible": "100%",
+         "Fez Feasible": "16.4-18.9%", "Best Cost (Fez)": "n/a\u2020", "True Optimum": "-0.1803"},
+        {"Circuit": "Portfolio -- XY-mixer (hardware-native)", "Qubits": 12, "Sim Feasible": "100%",
+         "Fez Feasible": "18.90%", "Best Cost (Fez)": "-0.1803 (exact optimum)", "True Optimum": "-0.1803"},
+        {"Circuit": "Staffing -- XY-mixer (per-agent one-hot)", "Qubits": 16, "Sim Feasible": "100%",
+         "Fez Feasible": "1.20%", "Best Cost (Fez)": "-2892", "True Optimum": "-3184"},
+    ]
+    hw_df = pd.DataFrame(hw_rows)
+    st.dataframe(hw_df, use_container_width=True, hide_index=True)
+    st.caption("*Below the uniform-random baseline for that problem size -- this run's simulator training itself "
+               "did not converge well, independent of hardware noise. \u2020Feasibility tracked by Hamming weight only in this run; "
+               "exact best-cost bitstring not separately logged.")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("**Feasibility: theory vs. reality**")
+
+    compare_fig = go.Figure()
+    labels = ["Portfolio<br>penalty", "Staffing<br>penalty", "Portfolio<br>XY (ring)", "Portfolio<br>XY (hw-native)", "Staffing<br>XY (one-hot)"]
+    sim_vals = [4.80, 7.80, 100, 100, 100]
+    fez_vals = [10.50, 4.80, 17.65, 18.90, 1.20]  # ring value = midpoint of the two runs
+    compare_fig.add_trace(go.Bar(x=labels, y=sim_vals, name="Simulator (noiseless)", marker_color="#2D5266"))
+    compare_fig.add_trace(go.Bar(x=labels, y=fez_vals, name="Real Fez hardware", marker_color="#C97A5A"))
+    compare_fig.update_layout(
+        barmode="group", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#C4CAD4", family="Inter"),
+        yaxis=dict(title="Feasible probability (%)", gridcolor="#1E2530"),
+        legend=dict(orientation="h", y=-0.2), margin=dict(t=10, b=10, l=10, r=10), height=340,
+    )
+    st.plotly_chart(compare_fig, use_container_width=True)
+
+    st.markdown(f"""
+    <div class='interp-panel'>
+    <div class='interp-title'>What this means</div>
+    Constraint-preserving mixers give a <b>mathematical guarantee</b> of feasibility on a noiseless simulator --
+    100% every time, verified over 1000 shots per circuit. Real hardware noise breaks that guarantee, but by
+    very different amounts depending on circuit size and structure:
+    <br><br>
+    <b>The Portfolio hardware-native mixer found the exact true optimum</b> on real hardware (-0.1803) --
+    better than what the noiseless simulator itself converged to during training (-0.1690). When it landed in
+    the feasible subspace, the answer wasn't just valid, it was the best possible one.
+    <br><br>
+    <b>Hardware-native qubit routing did not clearly outperform an abstract mixer</b> (18.9% vs. 16.4-18.9%) --
+    the SWAP-reduction benefit was likely offset by a deeper real-backend transpile (4842 gates vs. a simpler
+    abstract transpile). Connectivity alone isn't the bottleneck; total gate count matters just as much.
+    <br><br>
+    <b>The Staffing one-hot mixer degraded the most</b> (100% &rarr; 1.2%) -- it's the largest circuit tested (16
+    qubits, four parallel mixer rings), and more total gates means more exposure to hardware noise, even though
+    the theoretical guarantee is identical to the smaller Portfolio circuits.
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.caption("All five circuits executed via the Classiq IDE against an IBM Fez backend (156 qubits, Heron r2). "
+               "Full QASM exports and decode scripts are in this project's GitHub repository.")
 
 st.markdown(
     "<div class='footer-bar'>Vanguard &times; WISER Quantum+AI Challenge 2026 &middot; "
