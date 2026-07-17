@@ -29,6 +29,31 @@ STAFFING_DATA = os.path.join(APP_DIR, "staffing_data")
 
 st.set_page_config(page_title="Quantum Co-Pilot | Vanguard WISER 2026", layout="wide", page_icon="\u25c6")
 
+
+@st.cache_data
+def load_portfolio_data():
+    mu_df = pd.read_csv(os.path.join(PORTFOLIO_DATA, "expected_returns.csv"))
+    cov_df = pd.read_csv(os.path.join(PORTFOLIO_DATA, "covariance_matrix.csv"), index_col=0)
+    meta_df = pd.read_csv(os.path.join(PORTFOLIO_DATA, "asset_metadata.csv"))
+    return mu_df, cov_df, meta_df
+
+
+@st.cache_data
+def load_staffing_data():
+    agents_df = pd.read_csv(os.path.join(STAFFING_DATA, "agents.csv"))
+    shifts_df = pd.read_csv(os.path.join(STAFFING_DATA, "shifts.csv"))
+    demand_df = pd.read_csv(os.path.join(STAFFING_DATA, "demand_forecast.csv"))
+    return agents_df, shifts_df, demand_df
+
+
+# Persist the last computed result across reruns -- without this, touching
+# ANY other widget after clicking Generate wipes the displayed result, since
+# Streamlit reruns the whole script and resets button state to False.
+if "portfolio_result" not in st.session_state:
+    st.session_state.portfolio_result = None
+if "staffing_result" not in st.session_state:
+    st.session_state.staffing_result = None
+
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
@@ -97,9 +122,7 @@ if page == "Portfolio Co-Pilot":
     st.markdown("<div class='page-desc'>Quantum-assisted allocation recommendation with live constraint validation. Every result below is computed on demand.</div>", unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
-    mu_df = pd.read_csv(os.path.join(PORTFOLIO_DATA, "expected_returns.csv"))
-    cov_df = pd.read_csv(os.path.join(PORTFOLIO_DATA, "covariance_matrix.csv"), index_col=0)
-    meta_df = pd.read_csv(os.path.join(PORTFOLIO_DATA, "asset_metadata.csv"))
+    mu_df, cov_df, meta_df = load_portfolio_data()
     asset_ids = mu_df["asset_id"].tolist()
     asset_names = dict(zip(mu_df["asset_id"], mu_df["name"]))
     mu = mu_df["expected_return_annual"].values
@@ -117,59 +140,75 @@ if page == "Portfolio Co-Pilot":
             budget = st.slider("Target number of holdings", 3, 8, 4, 1)
             solver_choice = st.selectbox("Solver engine", ["Exact (classical)", "QAOA (quantum simulator)"])
             st.markdown("")
-            solve_btn = st.button("Generate Recommendation", type="primary", use_container_width=True)
+            solve_btn = st.button("Generate Recommendation", type="primary", width='stretch')
 
     with col_results:
         if solve_btn:
-            qp = QuadraticProgram(name="portfolio_selection")
-            for aid in asset_ids:
-                qp.binary_var(name=aid)
-            linear = {aid: -mu[i] for i, aid in enumerate(asset_ids)}
-            quadratic = {}
-            for i in range(n):
-                for j in range(n):
-                    if i == j:
-                        quadratic[(asset_ids[i], asset_ids[j])] = risk_aversion * sigma[i, j]
-                    elif i < j:
-                        quadratic[(asset_ids[i], asset_ids[j])] = 2 * risk_aversion * sigma[i, j]
-            qp.minimize(linear=linear, quadratic=quadratic)
-            qp.linear_constraint(linear={aid: 1 for aid in asset_ids}, sense="==", rhs=budget, name="budget")
+            try:
+                qp = QuadraticProgram(name="portfolio_selection")
+                for aid in asset_ids:
+                    qp.binary_var(name=aid)
+                linear = {aid: -mu[i] for i, aid in enumerate(asset_ids)}
+                quadratic = {}
+                for i in range(n):
+                    for j in range(n):
+                        if i == j:
+                            quadratic[(asset_ids[i], asset_ids[j])] = risk_aversion * sigma[i, j]
+                        elif i < j:
+                            quadratic[(asset_ids[i], asset_ids[j])] = 2 * risk_aversion * sigma[i, j]
+                qp.minimize(linear=linear, quadratic=quadratic)
+                qp.linear_constraint(linear={aid: 1 for aid in asset_ids}, sense="==", rhs=budget, name="budget")
 
-            t0 = time.time()
-            solve_started_at = datetime.datetime.now()
-            with st.status("Running live optimization...", expanded=True) as status:
-                st.write("Formulating QUBO from current goals...")
-                time.sleep(0.15)
-                st.write(f"Encoding {n} assets, budget constraint B={budget}...")
-                time.sleep(0.15)
-                if solver_choice.startswith("Exact"):
-                    st.write("Diagonalizing via exact eigensolver...")
-                    solver = MinimumEigenOptimizer(NumPyMinimumEigensolver())
-                else:
-                    st.write("Building QAOA circuit (3 reps) and transpiling...")
-                    sampler = StatevectorSampler()
-                    pm = generate_preset_pass_manager(optimization_level=1, basis_gates=["rz", "sx", "x", "cx"])
-                    qaoa = QAOA(sampler=sampler, optimizer=COBYLA(maxiter=200), reps=3, transpiler=pm)
-                    solver = MinimumEigenOptimizer(qaoa)
-                    st.write("Running COBYLA optimization loop...")
-                result = solver.solve(qp)
-                st.write("Validating constraint satisfaction...")
-                status.update(label="Optimization complete", state="complete", expanded=False)
-            elapsed = time.time() - t0
+                t0 = time.time()
+                solve_started_at = datetime.datetime.now()
+                with st.status("Running live optimization...", expanded=True) as status:
+                    st.write("Formulating QUBO from current goals...")
+                    time.sleep(0.15)
+                    st.write(f"Encoding {n} assets, budget constraint B={budget}...")
+                    time.sleep(0.15)
+                    if solver_choice.startswith("Exact"):
+                        st.write("Diagonalizing via exact eigensolver...")
+                        solver = MinimumEigenOptimizer(NumPyMinimumEigensolver())
+                    else:
+                        st.write("Building QAOA circuit (3 reps) and transpiling...")
+                        sampler = StatevectorSampler()
+                        pm = generate_preset_pass_manager(optimization_level=1, basis_gates=["rz", "sx", "x", "cx"])
+                        qaoa = QAOA(sampler=sampler, optimizer=COBYLA(maxiter=200), reps=3, transpiler=pm)
+                        solver = MinimumEigenOptimizer(qaoa)
+                        st.write("Running COBYLA optimization loop...")
+                    result = solver.solve(qp)
+                    st.write("Validating constraint satisfaction...")
+                    status.update(label="Optimization complete", state="complete", expanded=False)
+                elapsed = time.time() - t0
 
+                selected = [asset_ids[i] for i, v in enumerate(result.x) if v > 0.5]
+                feasible = len(selected) == budget
+
+                st.session_state.portfolio_result = {
+                    "selected": selected, "fval": result.fval, "elapsed": elapsed,
+                    "feasible": feasible, "solve_started_at": solve_started_at,
+                    "solver_choice": solver_choice, "risk_aversion": risk_aversion,
+                    "budget": budget,
+                }
+            except Exception as e:
+                st.error(f"Optimization failed: {e}. Try adjusting your settings and clicking Generate again.")
+                st.session_state.portfolio_result = None
+
+        r = st.session_state.portfolio_result
+        if r:
             st.markdown(
                 f"<div class='live-badge'><span class='live-dot'></span>LIVE RESULT &middot; "
-                f"computed {solve_started_at.strftime('%H:%M:%S')}</div>",
+                f"computed {r['solve_started_at'].strftime('%H:%M:%S')}</div>",
                 unsafe_allow_html=True,
             )
 
-            selected = [asset_ids[i] for i, v in enumerate(result.x) if v > 0.5]
-            feasible = len(selected) == budget
+            selected = r["selected"]
+            feasible = r["feasible"]
 
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Holdings", len(selected))
-            m2.metric("Objective Cost", f"{result.fval:.4f}")
-            m3.metric("Solve Time", f"{elapsed:.2f}s")
+            m2.metric("Objective Cost", f"{r['fval']:.4f}")
+            m3.metric("Solve Time", f"{r['elapsed']:.2f}s")
             m4.metric("Constraint Status", "Satisfied" if feasible else "Violated")
 
             st.markdown("<br>", unsafe_allow_html=True)
@@ -196,7 +235,7 @@ if page == "Portfolio Co-Pilot":
                         showlegend=True, legend=dict(orientation="h", y=-0.15),
                         margin=dict(t=10, b=10, l=10, r=10), height=320,
                     )
-                    st.plotly_chart(donut, use_container_width=True)
+                    st.plotly_chart(donut, width='stretch')
 
                 with viz_col2:
                     st.markdown("**Risk-Return Landscape**")
@@ -227,7 +266,7 @@ if page == "Portfolio Co-Pilot":
                         showlegend=True, legend=dict(orientation="h", y=-0.25),
                         margin=dict(t=10, b=10, l=10, r=10), height=320,
                     )
-                    st.plotly_chart(scatter, use_container_width=True)
+                    st.plotly_chart(scatter, width='stretch')
 
             st.markdown("**Recommended Allocation**")
 
@@ -241,7 +280,7 @@ if page == "Portfolio Co-Pilot":
                 })
                 st.dataframe(
                     alloc_df,
-                    use_container_width=True,
+                    width='stretch',
                     hide_index=True,
                     column_config={
                         "Weight": st.column_config.ProgressColumn(
@@ -258,19 +297,19 @@ if page == "Portfolio Co-Pilot":
                 port_vol = float(np.sqrt(x_vec @ sigma @ x_vec)) / len(selected)
                 classes_present = sorted(set(asset_class[a] for a in selected))
                 n_classes = len(classes_present)
-                risk_word = "defensive, drawdown-focused" if risk_aversion >= 1.2 else (
-                    "balanced" if risk_aversion >= 0.6 else "growth-oriented")
+                risk_word = "defensive, drawdown-focused" if r["risk_aversion"] >= 1.2 else (
+                    "balanced" if r["risk_aversion"] >= 0.6 else "growth-oriented")
 
                 st.markdown(f"""
                 <div class='interp-panel'>
                 <div class='interp-title'>What this means</div>
-                At a risk aversion of <b>{risk_aversion}</b>, the optimizer favored a <b>{risk_word}</b> allocation.
+                At a risk aversion of <b>{r['risk_aversion']}</b>, the optimizer favored a <b>{risk_word}</b> allocation.
                 The recommended portfolio holds <b>{len(selected)} assets</b> spanning <b>{n_classes} asset class{'es' if n_classes != 1 else ''}</b>
                 ({', '.join(classes_present)}), with an average expected return of
                 <b>{port_return_avg*100:.1f}%</b> annually and an estimated portfolio volatility of
                 <b>{port_vol*100:.1f}%</b> across the selected holdings.
                 {"This spread across multiple asset classes reduces concentration risk -- a single sector downturn would not affect the whole portfolio equally." if n_classes >= 3 else "<b>Note:</b> holdings are concentrated in fewer asset classes than typical guidance recommends -- consider raising the holdings count or adjusting risk aversion for broader diversification."}
-                The objective cost of <b>{result.fval:.4f}</b> reflects expected return minus a risk penalty
+                The objective cost of <b>{r['fval']:.4f}</b> reflects expected return minus a risk penalty
                 (lower is better) -- it is not a return figure by itself, but the trade-off the optimizer balanced
                 to reach this recommendation.
                 </div>
@@ -278,11 +317,11 @@ if page == "Portfolio Co-Pilot":
 
             with st.expander("Run details"):
                 st.markdown(f"""
-                - **Solver:** {solver_choice}
-                - **Risk aversion:** {risk_aversion}
-                - **Target holdings:** {budget}
+                - **Solver:** {r['solver_choice']}
+                - **Risk aversion:** {r['risk_aversion']}
+                - **Target holdings:** {r['budget']}
                 - **Feasible:** {feasible}
-                - **Executed:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+                - **Executed:** {r['solve_started_at'].strftime('%Y-%m-%d %H:%M:%S')}
                 """)
         else:
             st.markdown("<div style='padding:60px 0; text-align:center; color:#4B5563;'>Set investment goals and click <b>Generate Recommendation</b> to run the live optimizer.</div>", unsafe_allow_html=True)
@@ -315,7 +354,7 @@ elif page == "Workforce Planner":
                                            help="Must exceed labor cost or the solver will under-staff")
             volume_spike = st.checkbox("Simulate demand spike (+40%)")
             st.markdown("")
-            solve_btn2 = st.button("Generate Schedule", type="primary", use_container_width=True)
+            solve_btn2 = st.button("Generate Schedule", type="primary", width='stretch')
 
     with col_results2:
         if solve_btn2:
@@ -402,7 +441,7 @@ elif page == "Workforce Planner":
                     yaxis=dict(title="Agents", gridcolor="#1E2530"),
                     legend=dict(orientation="h", y=-0.2), margin=dict(t=10, b=10, l=10, r=10), height=300,
                 )
-                st.plotly_chart(cov_fig, use_container_width=True)
+                st.plotly_chart(cov_fig, width='stretch')
 
             with viz_col2:
                 st.markdown("**Forecasted Demand by Interval**")
@@ -423,7 +462,7 @@ elif page == "Workforce Planner":
                     yaxis=dict(title="Calls per interval", gridcolor="#1E2530"),
                     margin=dict(t=10, b=10, l=10, r=10), height=300, showlegend=False,
                 )
-                st.plotly_chart(demand_fig, use_container_width=True)
+                st.plotly_chart(demand_fig, width='stretch')
 
             st.markdown("**Recommended Schedule**")
 
@@ -440,7 +479,7 @@ elif page == "Workforce Planner":
             schedule_df = pd.DataFrame(schedule_rows)
             st.dataframe(
                 schedule_df,
-                use_container_width=True,
+                width='stretch',
                 hide_index=True,
                 column_config={
                     "Status": st.column_config.TextColumn("Status"),
@@ -506,7 +545,7 @@ else:
          "Fez Feasible": "1.20%", "Best Cost (Fez)": "-2892", "True Optimum": "-3184"},
     ]
     hw_df = pd.DataFrame(hw_rows)
-    st.dataframe(hw_df, use_container_width=True, hide_index=True)
+    st.dataframe(hw_df, width='stretch', hide_index=True)
     st.caption("*Below the uniform-random baseline for that problem size -- this run's simulator training itself "
                "did not converge well, independent of hardware noise. \u2020Feasibility tracked by Hamming weight only in this run; "
                "exact best-cost bitstring not separately logged.")
@@ -526,7 +565,7 @@ else:
         yaxis=dict(title="Feasible probability (%)", gridcolor="#1E2530"),
         legend=dict(orientation="h", y=-0.2), margin=dict(t=10, b=10, l=10, r=10), height=340,
     )
-    st.plotly_chart(compare_fig, use_container_width=True)
+    st.plotly_chart(compare_fig, width='stretch')
 
     st.markdown(f"""
     <div class='interp-panel'>
