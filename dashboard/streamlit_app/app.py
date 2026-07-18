@@ -335,9 +335,7 @@ elif page == "Workforce Planner":
     st.markdown("<div class='page-desc'>Quantum-assisted shift scheduling with live demand-driven re-optimization.</div>", unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
-    agents_df = pd.read_csv(os.path.join(STAFFING_DATA, "agents.csv"))
-    shifts_df = pd.read_csv(os.path.join(STAFFING_DATA, "shifts.csv"))
-    demand_df = pd.read_csv(os.path.join(STAFFING_DATA, "demand_forecast.csv"))
+    agents_df, shifts_df, demand_df = load_staffing_data()
     agent_ids = agents_df["agent_id"].tolist()
     shift_ids = shifts_df["shift_id"].tolist()
     n_agents = len(agent_ids)
@@ -358,63 +356,81 @@ elif page == "Workforce Planner":
 
     with col_results2:
         if solve_btn2:
-            spike_mult = 1.4 if volume_spike else 1.0
-            required_agents = {}
-            for _, s in shifts_df.iterrows():
-                mask = (demand_df["interval_start_hour"] >= s["start_hour"]) & (demand_df["interval_start_hour"] < s["end_hour"])
-                total_calls = demand_df.loc[mask, "forecast_calls"].sum() * spike_mult
-                intervals = mask.sum()
-                calls_per_hour = total_calls / (intervals * 0.5)
-                required_agents[s["shift_id"]] = max(1, int(np.ceil(calls_per_hour / throughput)))
+            try:
+                spike_mult = 1.4 if volume_spike else 1.0
+                required_agents = {}
+                for _, s in shifts_df.iterrows():
+                    mask = (demand_df["interval_start_hour"] >= s["start_hour"]) & (demand_df["interval_start_hour"] < s["end_hour"])
+                    total_calls = demand_df.loc[mask, "forecast_calls"].sum() * spike_mult
+                    intervals = mask.sum()
+                    calls_per_hour = total_calls / (intervals * 0.5)
+                    required_agents[s["shift_id"]] = max(1, int(np.ceil(calls_per_hour / throughput)))
 
-            def vname(a, s):
-                return f"{a}_{s}"
+                def vname(a, s):
+                    return f"{a}_{s}"
 
-            var_names = [vname(a, s) for a in agent_ids for s in shift_ids]
-            qp = QuadraticProgram(name="staffing")
-            for v in var_names:
-                qp.binary_var(name=v)
-            linear = {vname(a, s): cost_per_hour[a] * shift_hours[s] for a in agent_ids for s in shift_ids}
-            quadratic = {}
-            for s in shift_ids:
-                req = required_agents[s]
-                vars_s = [vname(a, s) for a in agent_ids]
-                for v in vars_s:
-                    linear[v] = linear.get(v, 0) + coverage_penalty * (1 - 2 * req)
-                for i in range(len(vars_s)):
-                    for j in range(i + 1, len(vars_s)):
-                        key = (vars_s[i], vars_s[j])
-                        quadratic[key] = quadratic.get(key, 0) + 2 * coverage_penalty
-            qp.minimize(linear=linear, quadratic=quadratic)
-            for a in agent_ids:
-                qp.linear_constraint(linear={vname(a, s): 1 for s in shift_ids}, sense="<=", rhs=1, name=f"one_shift_{a}")
+                var_names = [vname(a, s) for a in agent_ids for s in shift_ids]
+                qp = QuadraticProgram(name="staffing")
+                for v in var_names:
+                    qp.binary_var(name=v)
+                linear = {vname(a, s): cost_per_hour[a] * shift_hours[s] for a in agent_ids for s in shift_ids}
+                quadratic = {}
+                for s in shift_ids:
+                    req = required_agents[s]
+                    vars_s = [vname(a, s) for a in agent_ids]
+                    for v in vars_s:
+                        linear[v] = linear.get(v, 0) + coverage_penalty * (1 - 2 * req)
+                    for i in range(len(vars_s)):
+                        for j in range(i + 1, len(vars_s)):
+                            key = (vars_s[i], vars_s[j])
+                            quadratic[key] = quadratic.get(key, 0) + 2 * coverage_penalty
+                qp.minimize(linear=linear, quadratic=quadratic)
+                for a in agent_ids:
+                    qp.linear_constraint(linear={vname(a, s): 1 for s in shift_ids}, sense="<=", rhs=1, name=f"one_shift_{a}")
 
-            t0 = time.time()
-            solve_started_at2 = datetime.datetime.now()
-            with st.status("Running live optimization...", expanded=True) as status2:
-                st.write(f"Computing required coverage per shift (spike={'ON' if volume_spike else 'OFF'})...")
-                time.sleep(0.15)
-                st.write(f"Encoding {len(var_names)} agent-shift variables...")
-                time.sleep(0.15)
-                st.write("Diagonalizing via exact eigensolver...")
-                solver = MinimumEigenOptimizer(NumPyMinimumEigensolver())
-                result = solver.solve(qp)
-                st.write("Validating shift coverage against demand...")
-                status2.update(label="Optimization complete", state="complete", expanded=False)
-            elapsed = time.time() - t0
+                t0 = time.time()
+                solve_started_at2 = datetime.datetime.now()
+                with st.status("Running live optimization...", expanded=True) as status2:
+                    st.write(f"Computing required coverage per shift (spike={'ON' if volume_spike else 'OFF'})...")
+                    time.sleep(0.15)
+                    st.write(f"Encoding {len(var_names)} agent-shift variables...")
+                    time.sleep(0.15)
+                    st.write("Diagonalizing via exact eigensolver...")
+                    solver = MinimumEigenOptimizer(NumPyMinimumEigensolver())
+                    result = solver.solve(qp)
+                    st.write("Validating shift coverage against demand...")
+                    status2.update(label="Optimization complete", state="complete", expanded=False)
+                elapsed = time.time() - t0
 
+                assignment = {v.split("_")[0]: v.split("_")[1] for v, val in zip(var_names, result.x) if val > 0.5}
+
+                st.session_state.staffing_result = {
+                    "assignment": assignment, "fval": result.fval, "elapsed": elapsed,
+                    "required_agents": required_agents, "solve_started_at": solve_started_at2,
+                    "throughput": throughput, "coverage_penalty": coverage_penalty,
+                    "volume_spike": volume_spike, "spike_mult": spike_mult,
+                }
+            except Exception as e:
+                st.error(f"Optimization failed: {e}. Try adjusting your settings and clicking Generate again.")
+                st.session_state.staffing_result = None
+
+        sr = st.session_state.staffing_result
+        if sr:
             st.markdown(
                 f"<div class='live-badge'><span class='live-dot'></span>LIVE RESULT &middot; "
-                f"computed {solve_started_at2.strftime('%H:%M:%S')}</div>",
+                f"computed {sr['solve_started_at'].strftime('%H:%M:%S')}</div>",
                 unsafe_allow_html=True,
             )
 
-            assignment = {v.split("_")[0]: v.split("_")[1] for v, val in zip(var_names, result.x) if val > 0.5}
+            assignment = sr["assignment"]
+            required_agents = sr["required_agents"]
+            volume_spike = sr["volume_spike"]
+            spike_mult = sr["spike_mult"]
 
             m1, m2, m3 = st.columns(3)
-            m1.metric("Total Labor Cost", f"${result.fval:.0f}" if result.fval >= 0 else f"-${abs(result.fval):.0f}")
+            m1.metric("Total Labor Cost", f"${sr['fval']:.0f}" if sr['fval'] >= 0 else f"-${abs(sr['fval']):.0f}")
             m2.metric("Agents Deployed", f"{len(assignment)}/{n_agents}")
-            m3.metric("Solve Time", f"{elapsed*1000:.0f}ms")
+            m3.metric("Solve Time", f"{sr['elapsed']*1000:.0f}ms")
 
             if volume_spike:
                 st.warning("Demand spike active: required coverage increased 40% across all shifts.")
@@ -486,10 +502,9 @@ elif page == "Workforce Planner":
                 },
             )
 
-            n_short = sum(1 for r in schedule_rows if r["Status"] == "Short")
+            n_short = sum(1 for row in schedule_rows if row["Status"] == "Short")
             n_covered = len(schedule_rows) - n_short
-            total_required = sum(required_agents.values())
-            avg_cost_per_agent = result.fval / len(assignment) if assignment else 0
+            avg_cost_per_agent = sr['fval'] / len(assignment) if assignment else 0
 
             spike_note = (
                 "This schedule was generated under a simulated 40% demand spike -- "
@@ -513,10 +528,10 @@ elif page == "Workforce Planner":
 
             with st.expander("Run details"):
                 st.markdown(f"""
-                - **Throughput:** {throughput} calls/hr per agent
-                - **Coverage penalty weight:** {coverage_penalty}
+                - **Throughput:** {sr['throughput']} calls/hr per agent
+                - **Coverage penalty weight:** {sr['coverage_penalty']}
                 - **Demand spike:** {'Active (+40%)' if volume_spike else 'Inactive'}
-                - **Executed:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+                - **Executed:** {sr['solve_started_at'].strftime('%Y-%m-%d %H:%M:%S')}
                 """)
         else:
             st.markdown("<div style='padding:60px 0; text-align:center; color:#4B5563;'>Set operating parameters and click <b>Generate Schedule</b> to run the live optimizer.</div>", unsafe_allow_html=True)
