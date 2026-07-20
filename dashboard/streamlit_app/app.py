@@ -74,6 +74,8 @@ st.markdown("""
     .stButton button:hover { background-color: #2D5266; color: #E4E7EB; border-color: #6E8FA3; }
     .stButton button[kind="primary"] { background-color: #2D5266; color: #E4E7EB; border: 1px solid #6E8FA3; }
     .stButton button[kind="primary"]:hover { background-color: #3A6B85; }
+    .stDownloadButton button { background-color: #12161F; color: #8A93A3; border: 1px solid #1E2530; border-radius: 6px; font-weight: 500; font-size: 12px; }
+    .stDownloadButton button:hover { background-color: #1E2530; color: #E4E7EB; border-color: #2D5266; }
     .status-panel { background-color: #12161F; border: 1px solid #1E2530; border-radius: 8px; padding: 12px 14px; margin-top: 16px; font-size: 12px; }
     .status-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
     .status-ok { color: #5FA88A; }
@@ -287,6 +289,23 @@ if page == "Portfolio Co-Pilot":
                             "Allocation", min_value=0, max_value=1, format="%.1f%%"
                         ),
                     },
+                )
+
+                export_df = pd.DataFrame({
+                    "Asset": selected,
+                    "Name": [asset_names[a] for a in selected],
+                    "Class": [asset_class[a] for a in selected],
+                    "Weight_Pct": [round(weight, 2)] * len(selected),
+                    "Objective_Cost": [round(r["fval"], 4)] * len(selected),
+                    "Risk_Aversion": [r["risk_aversion"]] * len(selected),
+                    "Solver": [r["solver_choice"]] * len(selected),
+                    "Computed_At": [r["solve_started_at"].strftime("%Y-%m-%d %H:%M:%S")] * len(selected),
+                })
+                st.download_button(
+                    label="Download Recommendation (CSV)",
+                    data=export_df.to_csv(index=False),
+                    file_name=f"portfolio_recommendation_{r['solve_started_at'].strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv",
                 )
             else:
                 st.warning("Solver did not converge to a valid allocation at this configuration.")
@@ -502,6 +521,19 @@ elif page == "Workforce Planner":
                 },
             )
 
+            export_df = schedule_df.copy()
+            export_df["Total_Cost"] = round(sr["fval"], 0)
+            export_df["Throughput_Calls_Per_Hr"] = sr["throughput"]
+            export_df["Coverage_Penalty_Weight"] = sr["coverage_penalty"]
+            export_df["Demand_Spike_Active"] = sr["volume_spike"]
+            export_df["Computed_At"] = sr["solve_started_at"].strftime("%Y-%m-%d %H:%M:%S")
+            st.download_button(
+                label="Download Schedule (CSV)",
+                data=export_df.to_csv(index=False),
+                file_name=f"staffing_schedule_{sr['solve_started_at'].strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+            )
+
             n_short = sum(1 for row in schedule_rows if row["Status"] == "Short")
             n_covered = len(schedule_rows) - n_short
             avg_cost_per_agent = sr['fval'] / len(assignment) if assignment else 0
@@ -544,14 +576,18 @@ elif page == "Workforce Planner":
 else:
     st.markdown("<div class='eyebrow'>Real Hardware Results</div>", unsafe_allow_html=True)
     st.markdown("<div class='page-title'>Hardware Validation</div>", unsafe_allow_html=True)
-    st.markdown("<div class='page-desc'>Five circuits, run on real IBM Fez hardware via the Classiq IDE -- not simulation. This page reports what actually happened, not what a model predicts should happen.</div>", unsafe_allow_html=True)
+    st.markdown("<div class='page-desc'>Six circuits, run on real IBM Fez hardware via the Classiq IDE -- not simulation. This page reports what actually happened, not what a model predicts should happen.</div>", unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
     hw_rows = [
-        {"Circuit": "Portfolio -- penalty method", "Qubits": 12, "Sim Feasible": "4.80%*",
+        {"Circuit": "Portfolio -- penalty method (single-run)", "Qubits": 12, "Sim Feasible": "4.80%*",
          "Fez Feasible": "10.50%", "Best Cost (Fez)": "-0.1745", "True Optimum": "-0.1803"},
-        {"Circuit": "Staffing -- penalty method", "Qubits": 12, "Sim Feasible": "7.80%*",
+        {"Circuit": "Portfolio -- penalty method (multi-start)", "Qubits": 12, "Sim Feasible": "100%",
+         "Fez Feasible": "15.80%", "Best Cost (Fez)": "-0.1800 (~exact)", "True Optimum": "-0.1803"},
+        {"Circuit": "Staffing -- penalty method (single-run)", "Qubits": 12, "Sim Feasible": "7.80%*",
          "Fez Feasible": "4.80%", "Best Cost (Fez)": "200", "True Optimum": "-3184"},
+        {"Circuit": "Staffing -- penalty method (multi-start)", "Qubits": 12, "Sim Feasible": "100%",
+         "Fez Feasible": "9.60%", "Best Cost (Fez)": "-3184 (exact)", "True Optimum": "-3184"},
         {"Circuit": "Portfolio -- XY-mixer (abstract ring)", "Qubits": 12, "Sim Feasible": "100%",
          "Fez Feasible": "16.4-18.9%", "Best Cost (Fez)": "n/a\u2020", "True Optimum": "-0.1803"},
         {"Circuit": "Portfolio -- XY-mixer (hardware-native)", "Qubits": 12, "Sim Feasible": "100%",
@@ -561,24 +597,27 @@ else:
     ]
     hw_df = pd.DataFrame(hw_rows)
     st.dataframe(hw_df, width='stretch', hide_index=True)
-    st.caption("*Below the uniform-random baseline for that problem size -- this run's simulator training itself "
-               "did not converge well, independent of hardware noise. \u2020Feasibility tracked by Hamming weight only in this run; "
+    st.caption("*Below the uniform-random baseline for that problem size -- this single-run's simulator training itself "
+               "did not converge well, independent of hardware noise. Multi-start (8 restarts, best kept) fixes this, "
+               "see rows above. \u2020Feasibility tracked by Hamming weight only in this run; "
                "exact best-cost bitstring not separately logged.")
 
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("**Feasibility: theory vs. reality**")
 
     compare_fig = go.Figure()
-    labels = ["Portfolio<br>penalty", "Staffing<br>penalty", "Portfolio<br>XY (ring)", "Portfolio<br>XY (hw-native)", "Staffing<br>XY (one-hot)"]
-    sim_vals = [4.80, 7.80, 100, 100, 100]
-    fez_vals = [10.50, 4.80, 17.65, 18.90, 1.20]  # ring value = midpoint of the two runs
+    labels = ["Portfolio<br>penalty<br>(single)", "Portfolio<br>penalty<br>(multi-start)",
+              "Staffing<br>penalty<br>(single)", "Staffing<br>penalty<br>(multi-start)",
+              "Portfolio<br>XY (ring)", "Portfolio<br>XY (hw-native)", "Staffing<br>XY (one-hot)"]
+    sim_vals = [4.80, 100, 7.80, 100, 100, 100, 100]
+    fez_vals = [10.50, 15.80, 4.80, 9.60, 17.65, 18.90, 1.20]
     compare_fig.add_trace(go.Bar(x=labels, y=sim_vals, name="Simulator (noiseless)", marker_color="#2D5266"))
     compare_fig.add_trace(go.Bar(x=labels, y=fez_vals, name="Real Fez hardware", marker_color="#C97A5A"))
     compare_fig.update_layout(
         barmode="group", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#C4CAD4", family="Inter"),
         yaxis=dict(title="Feasible probability (%)", gridcolor="#1E2530"),
-        legend=dict(orientation="h", y=-0.2), margin=dict(t=10, b=10, l=10, r=10), height=340,
+        legend=dict(orientation="h", y=-0.2), margin=dict(t=10, b=10, l=10, r=10), height=360,
     )
     st.plotly_chart(compare_fig, width='stretch')
 
@@ -589,22 +628,25 @@ else:
     100% every time, verified over 1000 shots per circuit. Real hardware noise breaks that guarantee, but by
     very different amounts depending on circuit size and structure:
     <br><br>
+    <b>Multi-start training measurably improved real-hardware results in both tracks.</b> Portfolio's feasible
+    mass rose from 10.50% to 15.80%; Staffing's roughly doubled (4.80% to 9.60%) and its best answer went from
+    a badly-off 200 to the exact global optimum -3184. A free, 40-second classical fix produced a real,
+    measurable hardware improvement -- no new quantum technique required.
+    <br><br>
     <b>The Portfolio hardware-native mixer found the exact true optimum</b> on real hardware (-0.1803) --
-    better than what the noiseless simulator itself converged to during training (-0.1690). When it landed in
-    the feasible subspace, the answer wasn't just valid, it was the best possible one.
+    better than what the noiseless simulator itself converged to during training (-0.1690).
     <br><br>
     <b>Hardware-native qubit routing did not clearly outperform an abstract mixer</b> (18.9% vs. 16.4-18.9%) --
-    the SWAP-reduction benefit was likely offset by a deeper real-backend transpile (4842 gates vs. a simpler
-    abstract transpile). Connectivity alone isn't the bottleneck; total gate count matters just as much.
+    the SWAP-reduction benefit was likely offset by a deeper real-backend transpile. Connectivity alone isn't
+    the bottleneck; total gate count matters just as much.
     <br><br>
     <b>The Staffing one-hot mixer degraded the most</b> (100% &rarr; 1.2%) -- it's the largest circuit tested (16
-    qubits, four parallel mixer rings), and more total gates means more exposure to hardware noise, even though
-    the theoretical guarantee is identical to the smaller Portfolio circuits.
+    qubits, four parallel mixer rings), and more total gates means more exposure to hardware noise.
     </div>
     """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    st.caption("All five circuits executed via the Classiq IDE against an IBM Fez backend (156 qubits, Heron r2). "
+    st.caption("All circuits executed via the Classiq IDE against an IBM Fez backend (156 qubits, Heron r2). "
                "Full QASM exports and decode scripts are in this project's GitHub repository.")
 
 st.markdown(
